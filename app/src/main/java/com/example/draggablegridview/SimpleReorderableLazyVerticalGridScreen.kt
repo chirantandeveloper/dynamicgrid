@@ -30,7 +30,6 @@ import androidx.compose.ui.unit.dp
 import com.example.draggablegridview.data.items
 import com.dynamicgrid.grid.dragableGridComposable.ReorderableItem
 import com.dynamicgrid.grid.dragableGridComposable.rememberDraggableGridState
-import com.dynamicgrid.grid.dragableGridComposable.rememberReorderableLazyGridState
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -61,42 +60,7 @@ fun SimpleReorderableLazyVerticalGridScreen() {
                     },
                     modifier = Modifier
                         .height(96.dp)
-                        .longPressDraggableHandle()
-                        .clearAndSetSemantics { }
-                        .semantics {
-                            customActions = listOf(
-                                CustomAccessibilityAction(
-                                    label = "Move Before",
-                                    action = {
-                                        if (index > 0) {
-                                            list = list
-                                                .toMutableList()
-                                                .apply {
-                                                    add(index - 1, removeAt(index))
-                                                }
-                                            true
-                                        } else {
-                                            false
-                                        }
-                                    }
-                                ),
-                                CustomAccessibilityAction(
-                                    label = "Move After",
-                                    action = {
-                                        if (index < list.size - 1) {
-                                            list = list
-                                                .toMutableList()
-                                                .apply {
-                                                    add(index + 1, removeAt(index))
-                                                }
-                                            true
-                                        } else {
-                                            false
-                                        }
-                                    }
-                                ),
-                            )
-                        },
+                        .longPressDraggableHandle(),
                 ) {
                     Box(Modifier.fillMaxSize()) {
                         Text(
