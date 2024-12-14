@@ -23,7 +23,7 @@ fun DraggableGrid(items: List<Item>, onSwap: (Int, Int) -> Unit) {
     var draggedOffset by remember { mutableStateOf(Offset.Zero) }
 
     LazyVerticalGrid(
-        columns = GridCells.Fixed(3), // Change column count as needed
+        columns = GridCells.Fixed(3), // column count
         modifier = Modifier.fillMaxSize()
     ) {
         items(items.size) { index ->
