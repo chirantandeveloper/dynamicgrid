@@ -34,7 +34,7 @@ import com.dynamicgrid.grid.dragableGridComposable.rememberDraggableGridState
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SimpleReorderableLazyVerticalGridScreen() {
-
+        //todo (make it optimised)
     var list by remember { mutableStateOf(items) }
     val lazyGridState = rememberLazyGridState()
     val reorderableLazyGridState = rememberDraggableGridState(lazyGridState) { from, to ->
