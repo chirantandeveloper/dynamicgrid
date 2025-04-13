@@ -1,5 +1,6 @@
 package com.dynamicgrid.grid.dragableGridComposable
 
+import android.util.Log
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.Spring
@@ -143,12 +144,6 @@ class DraggableGridState internal constructor(
     gridState: LazyGridState,
     coroutineScope: CoroutineScope,
     moveAction: State<suspend CoroutineScope.(from: LazyGridItemInfo, to: LazyGridItemInfo) -> Unit>,
-
-    /**
-     * The threshold in pixels for scrolling the grid when dragging an item.
-     * If the dragged item is within this threshold of the top or bottom of the grid, the grid will scroll.
-     * Must be greater than 0.
-     */
     scrollTriggerPx: Float,
     pixelPadding: AbsolutePixelPadding,
     autoScroller: AutoScroller,
@@ -175,16 +170,9 @@ open class ReorderableLazyCollectionState<out T> internal constructor(
 
     private val layoutDirection: LayoutDirection,
 
-    /**
-     * Whether this is a LazyVerticalStaggeredGrid
-     */
     private val lazyVerticalStaggeredGridRtlFix: Boolean = false,
 
-    /**
-     * A function that determines whether the `draggingItem` should be moved with the `item`.
-     * Given their bounding rectangles, return `true` if they should be moved.
-     * The default implementation is to move if the dragging item's bounding rectangle has crossed the center of the item's bounding rectangle.
-     */
+
     private val shouldItemMove: (draggingItem: Rect, item: Rect) -> Boolean = { draggingItem, item ->
         draggingItem.contains(item.center)
     },
@@ -516,21 +504,6 @@ open class ReorderableLazyCollectionState<out T> internal constructor(
     ) {
         if (draggingItem.index == targetItem.index) return
 
-        // TODO(foundation v1.7.0): when `requestScrollToItem` is released uncomment this and remove `scrollToIndex` and the following `if` block
-        // see https://android-review.googlesource.com/c/platform/frameworks/support/+/2987293
-        // see https://github.com/Calvin-LL/Reorderable/issues/4
-//        if (
-//            draggingItem.index == state.firstVisibleItemIndex ||
-//            targetItem.index == state.firstVisibleItemIndex
-//        ) {
-//            state.requestScrollToItem(
-//                state.firstVisibleItemIndex,
-//                state.firstVisibleItemScrollOffset
-//            )
-//        }
-//
-//        onMoveState.value(draggingItem, targetItem)
-
         val scrollToIndex = if (targetItem.index == state.firstVisibleItemIndex) {
             draggingItem.index
         } else if (draggingItem.index == state.firstVisibleItemIndex) {
@@ -539,8 +512,6 @@ open class ReorderableLazyCollectionState<out T> internal constructor(
             null
         }
         if (scrollToIndex != null) {
-            // this is needed to neutralize automatic keeping the first item first.
-            // see https://github.com/Calvin-LL/Reorderable/issues/4
             state.scrollToItem(scrollToIndex, state.firstVisibleItemScrollOffset)
         }
 
@@ -616,6 +587,7 @@ fun LazyGridItemScope.ReorderableItem(
 ) {
     val dragging by state.isItemDragging(key)
     val offsetModifier = if (dragging) {
+        Log.e("TAG", "ReorderableItem: dragging $key", )
         Modifier
             .zIndex(1f)
             .graphicsLayer {

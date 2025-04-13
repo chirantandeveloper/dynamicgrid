@@ -1,5 +1,6 @@
 package com.dynamicgrid.grid.dragableGridComposable
 
+import android.util.Log
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -183,6 +184,7 @@ internal fun ReorderableCollectionItem(
 ) {
     var itemPosition by remember { mutableStateOf(Offset.Zero) }
 
+
     Box(
         modifier.onGloballyPositioned {
             itemPosition = it.positionInRoot()
@@ -199,8 +201,10 @@ internal fun ReorderableCollectionItem(
     }
     LaunchedEffect(state.reorderableKeys, enabled) {
         if (enabled) {
+            Log.e("TAG", "ReorderableCollectionItem: add $key", )
             state.reorderableKeys.add(key)
         } else {
+            Log.e("TAG", "ReorderableCollectionItem: remove $key", )
             state.reorderableKeys.remove(key)
         }
     }

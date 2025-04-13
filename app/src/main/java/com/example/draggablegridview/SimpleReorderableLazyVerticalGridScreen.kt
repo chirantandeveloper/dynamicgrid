@@ -12,7 +12,11 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material3.Card
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -30,17 +34,20 @@ import androidx.compose.ui.unit.dp
 import com.example.draggablegridview.data.items
 import com.dynamicgrid.grid.dragableGridComposable.ReorderableItem
 import com.dynamicgrid.grid.dragableGridComposable.rememberDraggableGridState
+import com.example.draggablegridview.data.Item
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun SimpleReorderableLazyVerticalGridScreen() {
-        //todo (make it optimised)
-    var list by remember { mutableStateOf(items) }
+fun SimpleReorderableLazyVerticalGridScreen(list : List<Item>, onMove : (Int, Int) -> Unit, onRemove:(Item)->Unit ) {
+
+    //var list by remember { mutableStateOf(items) }
     val lazyGridState = rememberLazyGridState()
     val reorderableLazyGridState = rememberDraggableGridState(lazyGridState) { from, to ->
-        list = list.toMutableList().apply {
-            add(to.index, removeAt(from.index))
-        }
+//        list = list.toMutableList().apply {
+//            add(to.index, removeAt(from.index))
+//        }
+        onMove(to.index, from.index)
+
 
     }
 
@@ -63,6 +70,11 @@ fun SimpleReorderableLazyVerticalGridScreen() {
                         .longPressDraggableHandle(),
                 ) {
                     Box(Modifier.fillMaxSize()) {
+                        IconButton(modifier = Modifier.align(Alignment.TopEnd), onClick = {
+                            onRemove(item)
+                        }) {
+                            Icon(imageVector = Icons.Default.Clear, contentDescription = "")
+                        }
                         Text(
                             item.text,
                             Modifier
