@@ -17,6 +17,12 @@
             android:exported="true"
             android:label="@string/title_activity_main"
             android:theme="@style/Theme.DraggableGridView" >
+        </activity>
+        <activity
+            android:name=".compose_select.ComposeSelectActivity"
+            android:exported="true"
+            android:label="@string/title_activity_main"
+            android:theme="@style/Theme.DraggableGridView" >
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

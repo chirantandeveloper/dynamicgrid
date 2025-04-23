@@ -76,5 +76,6 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 
     implementation(project(":mylibrary"))
+    implementation(project(":ComposeSelect"))
 
 }
