@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -30,6 +31,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -43,6 +45,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -57,90 +60,16 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import kotlinx.coroutines.launch
 
-// TODO: custom modification should implement 
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-fun <T> SearchableDropdown(
-    items: List<T>,
-    query: String,
-    onQueryChanged: (String) -> Unit,
-    onItemSelected: (T) -> Unit,
-    modifier: Modifier = Modifier,
-    itemContent: @Composable (T, String) -> Unit = { item, query ->
-        DefaultHighlightedItem(item.toString(), query)
-    },
-    placeholder: String = "Search..."
-) {
-    var expanded by remember { mutableStateOf(false) }
-    var textFieldSize by remember { mutableStateOf(Size.Zero) }
-
-
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .imePadding() // handles keyboard properly
-    ) {
-        OutlinedTextField(
-            value = query,
-            onValueChange = {
-                onQueryChanged(it)
-                expanded = true
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .align(Alignment.BottomCenter)
-                .onGloballyPositioned { coordinates ->
-                    textFieldSize = coordinates.size.toSize()
-                },
-            placeholder = { Text(placeholder) },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-            trailingIcon = {
-                if (query.isNotEmpty()) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Clear",
-                        modifier = Modifier.clickable {
-                            onQueryChanged("")
-                            expanded = false
-                        }
-                    )
-                }
-            },
-            singleLine = true,
-            shape = RoundedCornerShape(8.dp)
-        )
-
-        DropdownMenu(
-            expanded = expanded && query.isNotEmpty() && items.isNotEmpty(),
-            onDismissRequest = { expanded = false },
-            modifier = Modifier
-                .width(with(LocalDensity.current) { textFieldSize.width.toDp() })
-                .offset(y = 4.dp)
-                .align(Alignment.BottomCenter)
-        ) {
-            items.forEach { item ->
-                DropdownMenuItem(
-                    text = { itemContent(item, query) },
-                    onClick = {
-                        onItemSelected(item)
-                        onQueryChanged(item.toString())
-                        expanded = false
-                    }
-                )
-            }
-        }
-    }
-
-}
-
 
 @Composable
 fun SearchableDropdownWithOverlay(
     items: List<String>,
     selectedItem: String?,
     onItemSelected: (String) -> Unit,
-    placeholder: String
+    placeholder: String,
+    cornerRadius : CornerBasedShape = MaterialTheme.shapes.extraSmall
 ) {
+
     var query by remember { mutableStateOf("") }
     var expanded by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -164,6 +93,7 @@ fun SearchableDropdownWithOverlay(
                     query = it
                     expanded = true
                 },
+                shape = cornerRadius,
                 placeholder = { Text(placeholder) },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -210,7 +140,7 @@ fun SearchableDropdownWithOverlay(
                             .width(with(density) { textFieldSize.value.width.toDp() }) // match TextField width as needed
                             .fillMaxWidth()
                             .heightIn(max = 200.dp),
-                            shape = RoundedCornerShape(4.dp),
+                            shape = cornerRadius,
                             tonalElevation = 8.dp
                         ) {
                             LazyColumn {
