@@ -1,6 +1,5 @@
 package com.dynamicgrid.grid.dragableGridComposable
 
-import android.util.Log
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -25,32 +24,90 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 
+/**
+ * Default configuration values for the draggable grid.
+ */
 object DraggableGridDefaults {
-    val ScrollTriggerDistance = 48.dp
+    /**
+     * Distance from the edge that triggers auto-scrolling during drag operations.
+     */
+    val EDGE_SCROLL_THRESHOLD = 48.dp
 }
 
-internal const val ScrollFactor = 0.05f
+/**
+ * Factor used to calculate scroll speed relative to viewport size.
+ */
+internal const val SCROLL_SPEED_FACTOR = 0.05f
 
+/**
+ * Interface representing the state of a lazy collection (grid, list, etc.).
+ * 
+ * @param T Type of data associated with collection items
+ */
 internal interface LazyCollectionState<out T> {
+    /**
+     * Index of the first visible item in the collection.
+     */
     val firstVisibleItemIndex: Int
+    
+    /**
+     * Scroll offset of the first visible item.
+     */
     val firstVisibleItemScrollOffset: Int
+    
+    /**
+     * Layout information about the collection.
+     */
     val layoutInfo: LazyCollectionLayoutInfo<T>
 
+    /**
+     * Animates scrolling by the specified amount.
+     */
     suspend fun animateScrollBy(
         value: Float,
         animationSpec: AnimationSpec<Float> = spring(),
     ): Float
 
-    suspend fun scrollToItem(scrollToIndex: Int, firstVisibleItemScrollOffset: Int)
+    /**
+     * Scrolls to the specified item.
+     */
+    suspend fun scrollToItem(index: Int, scrollOffset: Int)
 }
 
+/**
+ * Layout information for a lazy collection.
+ * 
+ * @param T Type of data associated with collection items
+ */
 internal interface LazyCollectionLayoutInfo<out T> {
+    /**
+     * List of currently visible items.
+     */
     val visibleItemsInfo: List<LazyCollectionItemInfo<T>>
+    
+    /**
+     * Size of the viewport in pixels.
+     */
     val viewportSize: IntSize
+    
+    /**
+     * Orientation of the collection (vertical or horizontal).
+     */
     val orientation: Orientation
+    
+    /**
+     * Whether the layout is reversed.
+     */
     val reverseLayout: Boolean
+    
+    /**
+     * Padding before the first item.
+     */
     val beforeContentPadding: Int
 
+    /**
+     * Size of the viewport along the main axis.
+     */
     val mainAxisViewportSize: Int
         get() = when (orientation) {
             Orientation.Vertical -> viewportSize.height
@@ -90,9 +147,12 @@ internal interface LazyCollectionLayoutInfo<out T> {
     )
 
     /**
-     * get items that are fully inside the content area
+     * Gets items that are fully inside the content area.
+     * 
+     * @param padding Padding to consider when calculating the content area
+     * @return List of items fully within the content area
      */
-    fun getItemsInContentArea(padding: CollectionScrollPadding = CollectionScrollPadding.Zero): List<LazyCollectionItemInfo<T>> {
+    fun getItemsInContentArea(padding: CollectionScrollPadding = CollectionScrollPadding.ZERO): List<LazyCollectionItemInfo<T>> {
         val (contentStartOffset, contentEndOffset) = getScrollAreaOffsets(
             padding
         )
@@ -113,17 +173,47 @@ internal interface LazyCollectionLayoutInfo<out T> {
     }
 }
 
+/**
+ * Information about a single item in a lazy collection.
+ * 
+ * @param T Type of data associated with the item
+ */
 internal interface LazyCollectionItemInfo<out T> {
+    /**
+     * Index of the item in the collection.
+     */
     val index: Int
+    
+    /**
+     * Unique key identifying the item.
+     */
     val key: Any
+    
+    /**
+     * Position of the item in pixels.
+     */
     val offset: IntOffset
+    
+    /**
+     * Size of the item in pixels.
+     */
     val size: IntSize
+    
+    /**
+     * Additional data associated with the item.
+     */
     val data: T
 
+    /**
+     * Center point of the item.
+     */
     val center: IntOffset
         get() = IntOffset(offset.x + size.width / 2, offset.y + size.height / 2)
 }
 
+/**
+ * Represents padding values in pixels for all sides.
+ */
 internal data class AbsolutePixelPadding(
     val start: Float,
     val end: Float,
@@ -131,12 +221,15 @@ internal data class AbsolutePixelPadding(
     val bottom: Float,
 )
 
+/**
+ * Padding for scroll calculations along the main axis.
+ */
 internal data class CollectionScrollPadding(
     val start: Float,
     val end: Float,
 ) {
     companion object {
-        val Zero = CollectionScrollPadding(0f, 0f)
+        val ZERO = CollectionScrollPadding(0f, 0f)
 
         fun fromAbsolutePixelPadding(
             orientation: Orientation,
@@ -167,11 +260,24 @@ internal data class CollectionScrollPadding(
     }
 }
 
+/**
+ * Represents the start and end offsets of the scrollable area.
+ */
 internal data class ScrollAreaOffsets(
     val start: Float,
     val end: Float,
 )
 
+/**
+ * A reorderable item in a lazy collection that supports drag-and-drop.
+ * 
+ * @param state The reorderable collection state
+ * @param key Unique key for this item
+ * @param modifier Modifier to apply to the item
+ * @param enabled Whether this item can be dragged
+ * @param dragging Whether this item is currently being dragged
+ * @param content Content of the item
+ */
 @ExperimentalFoundationApi
 @Composable
 internal fun ReorderableCollectionItem(
@@ -183,7 +289,6 @@ internal fun ReorderableCollectionItem(
     content: @Composable ReorderableCollectionItemScope.(isDragging: Boolean) -> Unit,
 ) {
     var itemPosition by remember { mutableStateOf(Offset.Zero) }
-
 
     Box(
         modifier.onGloballyPositioned {
@@ -199,25 +304,45 @@ internal fun ReorderableCollectionItem(
         }
         itemScope.content(dragging)
     }
+    
+    // Register/unregister this item as reorderable
     LaunchedEffect(state.reorderableKeys, enabled) {
         if (enabled) {
-            Log.e("TAG", "ReorderableCollectionItem: add $key", )
             state.reorderableKeys.add(key)
         } else {
-            Log.e("TAG", "ReorderableCollectionItem: remove $key", )
             state.reorderableKeys.remove(key)
         }
     }
 }
 
+/**
+ * Scope for a reorderable collection item providing drag handle modifiers.
+ */
 @Stable
 interface ReorderableCollectionItemScope {
+    /**
+     * Makes this element a drag handle for immediate dragging.
+     * 
+     * @param enabled Whether dragging is enabled
+     * @param interactionSource Optional interaction source for tracking interactions
+     * @param onDragStarted Callback when dragging starts
+     * @param onDragStopped Callback when dragging stops
+     */
     fun Modifier.draggableHandle(
         enabled: Boolean = true,
         interactionSource: MutableInteractionSource? = null,
         onDragStarted: (startedPosition: Offset) -> Unit = {},
         onDragStopped: () -> Unit = {},
     ): Modifier
+    
+    /**
+     * Makes this element a drag handle that requires long press to start dragging.
+     * 
+     * @param enabled Whether dragging is enabled
+     * @param interactionSource Optional interaction source for tracking interactions
+     * @param onDragStarted Callback when dragging starts
+     * @param onDragStopped Callback when dragging stops
+     */
     fun Modifier.longPressDraggableHandle(
         enabled: Boolean = true,
         interactionSource: MutableInteractionSource? = null,
@@ -246,7 +371,7 @@ internal class ReorderableCollectionItemScopeImpl(
             handleOffset = it.positionInRoot()
             handleSize = it.size
         }.draggable(
-            key1 = reorderableLazyCollectionState,
+            key = reorderableLazyCollectionState,
             enabled = enabled && (reorderableLazyCollectionState.isItemDragging(key).value || !reorderableLazyCollectionState.isAnyItemDragging),
             interactionSource = interactionSource,
             onDragStarted = {
@@ -288,7 +413,7 @@ internal class ReorderableCollectionItemScopeImpl(
             handleOffset = it.positionInRoot()
             handleSize = it.size
         }.longPressDraggable(
-            key1 = reorderableLazyCollectionState,
+            key = reorderableLazyCollectionState,
             enabled = enabled && (reorderableLazyCollectionState.isItemDragging(key).value || !reorderableLazyCollectionState.isAnyItemDragging),
             interactionSource = interactionSource,
             onDragStarted = {

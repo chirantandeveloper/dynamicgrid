@@ -1,6 +1,5 @@
 package com.dynamicgrid.grid.dragableGridComposable
 
-import android.util.Log
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.Spring
@@ -51,52 +50,60 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
 import kotlin.coroutines.cancellation.CancellationException
 
+/**
+ * Creates and remembers a [DraggableGridState] for managing drag-and-drop in a lazy grid.
+ * 
+ * @param gridState The underlying [LazyGridState] to control
+ * @param contentPadding Padding around the draggable content area
+ * @param edgeScrollThreshold Distance from edges that triggers auto-scrolling
+ * @param autoScroller Optional custom auto-scroller for controlling scroll behavior
+ * @param onItemMoved Callback invoked when an item is moved to a new position
+ * @return A [DraggableGridState] that manages the drag-and-drop interactions
+ */
 @Composable
 fun rememberDraggableGridState(
     gridState: LazyGridState,
-    edgePadding: PaddingValues = PaddingValues(0.dp),
-    edgeScrollThreshold: Dp = DraggableGridDefaults.ScrollTriggerDistance,
+    contentPadding: PaddingValues = PaddingValues(0.dp),
+    edgeScrollThreshold: Dp = DraggableGridDefaults.EDGE_SCROLL_THRESHOLD,
     autoScroller: AutoScroller = rememberAutoScroller(
         scrollableState = gridState,
-        scrollPixelsProvider = { gridState.layoutInfo.mainAxisViewportSize * ScrollFactor },
+        scrollPixelsProvider = { gridState.layoutInfo.mainAxisViewportSize * SCROLL_SPEED_FACTOR },
     ),
-    onItemMoved: suspend CoroutineScope.(startItem: LazyGridItemInfo, endItem: LazyGridItemInfo) -> Unit,
+    onItemMoved: suspend CoroutineScope.(from: LazyGridItemInfo, to: LazyGridItemInfo) -> Unit,
 ): DraggableGridState {
 
     val density = LocalDensity.current
-    val scrollTriggerPx = with(density) { edgeScrollThreshold.toPx() }
+    val scrollThresholdPx = with(density) { edgeScrollThreshold.toPx() }
 
     // Capture the coroutine scope and latest onItemMoved handler
     val coroutineScope = rememberCoroutineScope()
-    val moveAction = rememberUpdatedState(onItemMoved)
+    val onItemMovedState = rememberUpdatedState(onItemMoved)
 
     // Handle layout direction (LTR/RTL) and padding calculation
     val layoutDirection = LocalLayoutDirection.current
-    val pixelPadding = with(density) {
+    val absolutePadding = with(density) {
         AbsolutePixelPadding(
-            start = edgePadding.calculateStartPadding(layoutDirection).toPx(),
-            end = edgePadding.calculateEndPadding(layoutDirection).toPx(),
-            top = edgePadding.calculateTopPadding().toPx(),
-            bottom = edgePadding.calculateBottomPadding().toPx(),
+            start = contentPadding.calculateStartPadding(layoutDirection).toPx(),
+            end = contentPadding.calculateEndPadding(layoutDirection).toPx(),
+            top = contentPadding.calculateTopPadding().toPx(),
+            bottom = contentPadding.calculateBottomPadding().toPx(),
         )
     }
 
     // Create and remember the state object
-    val draggableState = remember(
-        coroutineScope, gridState, scrollTriggerPx, pixelPadding, autoScroller
+    return remember(
+        coroutineScope, gridState, scrollThresholdPx, absolutePadding, autoScroller
     ) {
         DraggableGridState(
             gridState = gridState,
             coroutineScope = coroutineScope,
-            moveAction = moveAction,
-            scrollTriggerPx = scrollTriggerPx,
-            pixelPadding = pixelPadding,
+            onItemMovedState = onItemMovedState,
+            scrollThresholdPx = scrollThresholdPx,
+            absolutePadding = absolutePadding,
             autoScroller = autoScroller,
             layoutDirection = layoutDirection
         )
     }
-
-    return draggableState
 }
 
 
@@ -139,26 +146,40 @@ private fun LazyGridLayoutInfo.toLazyCollectionLayoutInfo() =
 
     }
 
+/**
+ * State holder for managing drag-and-drop operations in a lazy grid.
+ */
 @Stable
 class DraggableGridState internal constructor(
     gridState: LazyGridState,
     coroutineScope: CoroutineScope,
-    moveAction: State<suspend CoroutineScope.(from: LazyGridItemInfo, to: LazyGridItemInfo) -> Unit>,
-    scrollTriggerPx: Float,
-    pixelPadding: AbsolutePixelPadding,
+    onItemMovedState: State<suspend CoroutineScope.(from: LazyGridItemInfo, to: LazyGridItemInfo) -> Unit>,
+    scrollThresholdPx: Float,
+    absolutePadding: AbsolutePixelPadding,
     autoScroller: AutoScroller,
     layoutDirection: LayoutDirection,
 ) : ReorderableLazyCollectionState<LazyGridItemInfo>(
-    gridState.toLazyCollectionState(),
-    coroutineScope,
-    moveAction,
-    scrollTriggerPx,
-    pixelPadding,
-    autoScroller,
-    layoutDirection,
+    state = gridState.toLazyCollectionState(),
+    scope = coroutineScope,
+    onMoveState = onItemMovedState,
+    scrollThreshold = scrollThresholdPx,
+    scrollThresholdPadding = absolutePadding,
+    autoScroller = autoScroller,
+    layoutDirection = layoutDirection,
 )
 
 
+/**
+ * Base state class for managing reorderable lazy collections.
+ * 
+ * This class handles the core drag-and-drop logic including:
+ * - Tracking the dragging item
+ * - Managing auto-scrolling at edges
+ * - Coordinating item movements
+ * - Handling animations and visual feedback
+ * 
+ * @param T Type of data associated with collection items
+ */
 @Stable
 open class ReorderableLazyCollectionState<out T> internal constructor(
     private val state: LazyCollectionState<T>,
@@ -167,12 +188,8 @@ open class ReorderableLazyCollectionState<out T> internal constructor(
     private val scrollThreshold: Float,
     private val scrollThresholdPadding: AbsolutePixelPadding,
     private val autoScroller: AutoScroller,
-
     private val layoutDirection: LayoutDirection,
-
     private val lazyVerticalStaggeredGridRtlFix: Boolean = false,
-
-
     private val shouldItemMove: (draggingItem: Rect, item: Rect) -> Boolean = { draggingItem, item ->
         draggingItem.contains(item.center)
     },
@@ -339,9 +356,9 @@ open class ReorderableLazyCollectionState<out T> internal constructor(
 
         val isScrollingStarted = if (distanceFromStart < scrollThreshold) {
             autoScroller.start(
-                AutoScroller.Direction.BACKWARD,
-                getScrollSpeedMultiplier(distanceFromStart),
-                maxScrollDistanceProvider = {
+                direction = AutoScroller.ScrollDirection.BACKWARD,
+                speedMultiplier = getScrollSpeedMultiplier(distanceFromStart),
+                maxDistanceProvider = {
                     // distance from the start of the dragging item's stationary position to the end of the list
                     (draggingItemLayoutInfo?.let {
                         state.layoutInfo.mainAxisViewportSize -
@@ -349,14 +366,14 @@ open class ReorderableLazyCollectionState<out T> internal constructor(
                     }) ?: 0f
                 },
                 onScroll = {
-                    moveDraggingItemToEnd(AutoScroller.Direction.BACKWARD)
+                    moveDraggingItemToEnd(AutoScroller.ScrollDirection.BACKWARD)
                 }
             )
         } else if (distanceFromEnd < scrollThreshold) {
             autoScroller.start(
-                AutoScroller.Direction.FORWARD,
-                getScrollSpeedMultiplier(distanceFromEnd),
-                maxScrollDistanceProvider = {
+                direction = AutoScroller.ScrollDirection.FORWARD,
+                speedMultiplier = getScrollSpeedMultiplier(distanceFromEnd),
+                maxDistanceProvider = {
                     // distance from the end of the dragging item's stationary position to the start of the list
                     (draggingItemLayoutInfo?.let {
                         val visibleItems = state.layoutInfo.visibleItemsInfo
@@ -379,7 +396,7 @@ open class ReorderableLazyCollectionState<out T> internal constructor(
                     }) ?: 0f
                 },
                 onScroll = {
-                    moveDraggingItemToEnd(AutoScroller.Direction.FORWARD)
+                    moveDraggingItemToEnd(AutoScroller.ScrollDirection.FORWARD)
                 }
             )
         } else {
@@ -406,9 +423,11 @@ open class ReorderableLazyCollectionState<out T> internal constructor(
         onMoveStateMutex.unlock()
     }
 
-    // keep dragging item in visible area to prevent it from disappearing
+    /**
+     * Keeps the dragging item in the visible area to prevent it from disappearing.
+     */
     private suspend fun moveDraggingItemToEnd(
-        direction: AutoScroller.Direction,
+        direction: AutoScroller.ScrollDirection,
     ) {
         // wait for the current moveItems to finish
         onMoveStateMutex.lock()
@@ -419,8 +438,8 @@ open class ReorderableLazyCollectionState<out T> internal constructor(
             return
         }
         val isDraggingItemAtEnd = when (direction) {
-            AutoScroller.Direction.FORWARD -> draggingItem.index == state.layoutInfo.visibleItemsInfo.lastOrNull()?.index
-            AutoScroller.Direction.BACKWARD -> draggingItem.index == state.firstVisibleItemIndex
+            AutoScroller.ScrollDirection.FORWARD -> draggingItem.index == state.layoutInfo.visibleItemsInfo.lastOrNull()?.index
+            AutoScroller.ScrollDirection.BACKWARD -> draggingItem.index == state.firstVisibleItemIndex
         }
         if (isDraggingItemAtEnd) {
             onMoveStateMutex.unlock()
@@ -445,8 +464,8 @@ open class ReorderableLazyCollectionState<out T> internal constructor(
                 item.key in reorderableKeys && item.index != state.firstVisibleItemIndex
             }
             when (direction) {
-                AutoScroller.Direction.FORWARD -> it.findLast(targetItemFunc)
-                AutoScroller.Direction.BACKWARD -> it.find(targetItemFunc)
+                AutoScroller.ScrollDirection.FORWARD -> it.findLast(targetItemFunc)
+                AutoScroller.ScrollDirection.BACKWARD -> it.find(targetItemFunc)
             }
         }
         val job = scope.launch {
@@ -475,7 +494,7 @@ open class ReorderableLazyCollectionState<out T> internal constructor(
     private fun findTargetItem(
         draggingItemRect: Rect,
         items: List<LazyCollectionItemInfo<T>> = state.layoutInfo.getItemsInContentArea(),
-        direction: AutoScroller.Direction = AutoScroller.Direction.FORWARD,
+        direction: AutoScroller.ScrollDirection = AutoScroller.ScrollDirection.FORWARD,
         additionalPredicate: (LazyCollectionItemInfo<T>) -> Boolean = { true },
     ): LazyCollectionItemInfo<T>? {
         val targetItemFunc = { item: LazyCollectionItemInfo<T> ->
@@ -486,8 +505,8 @@ open class ReorderableLazyCollectionState<out T> internal constructor(
                     && additionalPredicate(item)
         }
         val targetItem = when (direction) {
-            AutoScroller.Direction.FORWARD -> items.find(targetItemFunc)
-            AutoScroller.Direction.BACKWARD -> items.findLast(targetItemFunc)
+            AutoScroller.ScrollDirection.FORWARD -> items.find(targetItemFunc)
+            AutoScroller.ScrollDirection.BACKWARD -> items.findLast(targetItemFunc)
         }
         return targetItem
     }
@@ -572,10 +591,23 @@ private fun LazyGridState.toLazyCollectionState() =
         override suspend fun animateScrollBy(value: Float, animationSpec: AnimationSpec<Float>) =
             this@toLazyCollectionState.animateScrollBy(value, animationSpec)
 
-        override suspend fun scrollToItem(scrollToIndex: Int, firstVisibleItemScrollOffset: Int) =
-            this@toLazyCollectionState.scrollToItem(scrollToIndex, firstVisibleItemScrollOffset)
+        override suspend fun scrollToItem(index: Int, scrollOffset: Int) =
+            this@toLazyCollectionState.scrollToItem(index, scrollOffset)
     }
 
+/**
+ * A reorderable item in a lazy grid that supports drag-and-drop.
+ * 
+ * This composable must be used within a [LazyGridItemScope] to create draggable items
+ * in a lazy grid. It handles the visual feedback during drag operations including
+ * elevation changes and smooth animations.
+ * 
+ * @param state The [DraggableGridState] managing the drag-and-drop operations
+ * @param key Unique key identifying this item
+ * @param modifier Modifier to apply to this item
+ * @param enabled Whether this item can be dragged
+ * @param content The content of this item, receives whether it's currently being dragged
+ */
 @ExperimentalFoundationApi
 @Composable
 fun LazyGridItemScope.ReorderableItem(
@@ -585,9 +617,11 @@ fun LazyGridItemScope.ReorderableItem(
     enabled: Boolean = true,
     content: @Composable ReorderableCollectionItemScope.(isDragging: Boolean) -> Unit,
 ) {
-    val dragging by state.isItemDragging(key)
-    val offsetModifier = if (dragging) {
-        Log.e("TAG", "ReorderableItem: dragging $key", )
+    val isDragging by state.isItemDragging(key)
+    
+    // Apply appropriate modifiers based on drag state
+    val offsetModifier = if (isDragging) {
+        // Currently dragging - apply translation and elevation
         Modifier
             .zIndex(1f)
             .graphicsLayer {
@@ -595,6 +629,7 @@ fun LazyGridItemScope.ReorderableItem(
                 translationX = state.draggingItemOffset.x
             }
     } else if (key == state.previousDraggingItemKey) {
+        // Was just dragged - animate back to position
         Modifier
             .zIndex(1f)
             .graphicsLayer {
@@ -604,6 +639,7 @@ fun LazyGridItemScope.ReorderableItem(
                     state.previousDraggingItemOffset.value.x
             }
     } else {
+        // Normal item - use default item animation
         Modifier.animateItem()
     }
 
@@ -612,7 +648,7 @@ fun LazyGridItemScope.ReorderableItem(
         key = key,
         modifier = modifier.then(offsetModifier),
         enabled = enabled,
-        dragging = dragging,
+        dragging = isDragging,
         content = content,
     )
 }
