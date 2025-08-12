@@ -292,7 +292,11 @@ internal fun ReorderableCollectionItem(
 
     Box(
         modifier.onGloballyPositioned {
-            itemPosition = it.positionInRoot()
+            // Reduce recompositions: update only when dragging and when value actually changes
+            if (state.isAnyItemDragging) {
+                val newPos = it.positionInRoot()
+                if (newPos != itemPosition) itemPosition = newPos
+            }
         }
     ) {
         val itemScope = remember(state, key) {
@@ -305,11 +309,12 @@ internal fun ReorderableCollectionItem(
         itemScope.content(dragging)
     }
     
-    // Register/unregister this item as reorderable
-    LaunchedEffect(state.reorderableKeys, enabled) {
+    // Register/unregister this item as reorderable using DisposableEffect to avoid relaunch churn
+    androidx.compose.runtime.DisposableEffect(key, enabled) {
         if (enabled) {
             state.reorderableKeys.add(key)
-        } else {
+        }
+        onDispose {
             state.reorderableKeys.remove(key)
         }
     }

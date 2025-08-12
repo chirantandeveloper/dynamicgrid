@@ -566,6 +566,12 @@ open class ReorderableLazyCollectionState<out T> internal constructor(
         }
     }
 
+    internal fun isItemJustDropped(key: Any): State<Boolean> {
+        return derivedStateOf {
+            key == previousDraggingItemKey
+        }
+    }
+
     private fun getScrollSpeedMultiplier(distance: Float): Float {
         // map distance in scrollThreshold..-scrollThreshold to 1..10
         return (1 - ((distance + scrollThreshold) / (scrollThreshold * 2)).coerceIn(
@@ -618,7 +624,8 @@ fun LazyGridItemScope.ReorderableItem(
     content: @Composable ReorderableCollectionItemScope.(isDragging: Boolean) -> Unit,
 ) {
     val isDragging by state.isItemDragging(key)
-    
+    val isJustDropped by state.isItemJustDropped(key)
+
     // Apply appropriate modifiers based on drag state
     val offsetModifier = if (isDragging) {
         // Currently dragging - apply translation and elevation
@@ -628,15 +635,13 @@ fun LazyGridItemScope.ReorderableItem(
                 translationY = state.draggingItemOffset.y
                 translationX = state.draggingItemOffset.x
             }
-    } else if (key == state.previousDraggingItemKey) {
+    } else if (isJustDropped) {
         // Was just dragged - animate back to position
         Modifier
             .zIndex(1f)
             .graphicsLayer {
-                translationY =
-                    state.previousDraggingItemOffset.value.y
-                translationX =
-                    state.previousDraggingItemOffset.value.x
+                translationY = state.previousDraggingItemOffset.value.y
+                translationX = state.previousDraggingItemOffset.value.x
             }
     } else {
         // Normal item - use default item animation
