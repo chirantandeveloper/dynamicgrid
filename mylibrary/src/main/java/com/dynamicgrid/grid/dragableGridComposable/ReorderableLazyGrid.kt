@@ -378,7 +378,6 @@ open class ReorderableLazyCollectionState<out T> internal constructor(
                     (draggingItemLayoutInfo?.let {
                         val visibleItems = state.layoutInfo.visibleItemsInfo
                         // use the item before the dragging item to prevent the dragging item from becoming the firstVisibleItem
-                        // TODO(foundation v1.7.0): remove once foundation v1.7.0 is out
                         val itemBeforeDraggingItem =
                             visibleItems.getOrNull(visibleItems.indexOfFirst { it.key == draggingItemKey } - 1)
                         var itemToAlmostScrollOff = itemBeforeDraggingItem ?: it
@@ -573,11 +572,10 @@ open class ReorderableLazyCollectionState<out T> internal constructor(
     }
 
     private fun getScrollSpeedMultiplier(distance: Float): Float {
-        // map distance in scrollThreshold..-scrollThreshold to 1..10
-        return (1 - ((distance + scrollThreshold) / (scrollThreshold * 2)).coerceIn(
-            0f,
-            1f
-        )) * 10
+        // Distance near the edge accelerates scrolling: 0..threshold -> 10..~1
+        val normalized = ((distance + scrollThreshold) / (scrollThreshold * 2)).coerceIn(0f, 1f)
+        val inverted = 1f - normalized
+        return inverted * 10f
     }
 }
 

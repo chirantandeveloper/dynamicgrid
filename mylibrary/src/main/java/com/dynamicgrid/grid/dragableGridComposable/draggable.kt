@@ -17,15 +17,76 @@ import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import kotlinx.coroutines.launch
 
+private enum class DragStartMode { Immediate, AfterLongPress }
+
+private fun Modifier.configureDrag(
+    mode: DragStartMode,
+    key: Any?,
+    enabled: Boolean,
+    interactionSource: MutableInteractionSource?,
+    onDragStarted: (Offset) -> Unit,
+    onDragStopped: () -> Unit,
+    onDrag: (change: PointerInputChange, dragAmount: Offset) -> Unit,
+): Modifier = composed {
+    val scope = rememberCoroutineScope()
+    var startInteraction by remember { mutableStateOf<DragInteraction.Start?>(null) }
+    var dragging by remember { mutableStateOf(false) }
+
+    // Ensure we tidy up interactions on disposal or key change
+    DisposableEffect(key) {
+        onDispose {
+            if (dragging) {
+                startInteraction?.let { s ->
+                    scope.launch { interactionSource?.emit(DragInteraction.Cancel(s)) }
+                }
+                onDragStopped()
+                dragging = false
+            }
+        }
+    }
+
+    pointerInput(key, enabled) {
+        if (!enabled) return@pointerInput
+        val commonStart: (Offset) -> Unit = { pos ->
+            dragging = true
+            startInteraction = DragInteraction.Start().also { s ->
+                scope.launch { interactionSource?.emit(s) }
+            }
+            onDragStarted(pos)
+        }
+        val commonEnd: () -> Unit = {
+            startInteraction?.let { s -> scope.launch { interactionSource?.emit(DragInteraction.Stop(s)) } }
+            if (dragging) onDragStopped()
+            dragging = false
+            startInteraction = null
+        }
+        val commonCancel: () -> Unit = {
+            startInteraction?.let { s -> scope.launch { interactionSource?.emit(DragInteraction.Cancel(s)) } }
+            if (dragging) onDragStopped()
+            dragging = false
+            startInteraction = null
+        }
+        when (mode) {
+            DragStartMode.Immediate ->
+                detectDragGestures(
+                    onDragStart = commonStart,
+                    onDragEnd = commonEnd,
+                    onDragCancel = commonCancel,
+                    onDrag = onDrag,
+                )
+            DragStartMode.AfterLongPress ->
+                detectDragGesturesAfterLongPress(
+                    onDragStart = commonStart,
+                    onDragEnd = commonEnd,
+                    onDragCancel = commonCancel,
+                    onDrag = onDrag,
+                )
+        }
+    }
+}
+
 /**
- * Makes an element draggable with immediate response to drag gestures.
- * 
- * @param key Unique key for this draggable modifier
- * @param enabled Whether dragging is enabled
- * @param interactionSource Optional source for tracking drag interactions
- * @param onDragStarted Callback when drag starts with the start position
- * @param onDragStopped Callback when drag stops
- * @param onDrag Callback for each drag movement with the change and delta
+ * Immediate drag handler.
  */
 internal fun Modifier.draggable(
     key: Any?,
@@ -34,89 +95,18 @@ internal fun Modifier.draggable(
     onDragStarted: (Offset) -> Unit = { },
     onDragStopped: () -> Unit = { },
     onDrag: (change: PointerInputChange, dragAmount: Offset) -> Unit,
-) = composed {
-    val coroutineScope = rememberCoroutineScope()
-    var currentDragInteraction by remember { mutableStateOf<DragInteraction.Start?>(null) }
-    var isDragging by remember { mutableStateOf(false) }
-
-    // Clean up when the key changes or the composable leaves composition
-    DisposableEffect(key) {
-        onDispose {
-            if (isDragging) {
-                // Cancel any ongoing drag interaction
-                currentDragInteraction?.let { interaction ->
-                    coroutineScope.launch {
-                        interactionSource?.emit(DragInteraction.Cancel(interaction))
-                    }
-                }
-                
-                // Notify that dragging has stopped
-                onDragStopped()
-                isDragging = false
-            }
-        }
-    }
-
-    pointerInput(key, enabled) {
-        if (enabled) {
-            detectDragGestures(
-                onDragStart = { startPosition ->
-                    isDragging = true
-                    
-                    // Start drag interaction
-                    currentDragInteraction = DragInteraction.Start().also { interaction ->
-                        coroutineScope.launch {
-                            interactionSource?.emit(interaction)
-                        }
-                    }
-                    
-                    onDragStarted(startPosition)
-                },
-                onDragEnd = {
-                    // End drag interaction
-                    currentDragInteraction?.let { interaction ->
-                        coroutineScope.launch {
-                            interactionSource?.emit(DragInteraction.Stop(interaction))
-                        }
-                    }
-                    
-                    if (isDragging) {
-                        onDragStopped()
-                    }
-                    
-                    isDragging = false
-                    currentDragInteraction = null
-                },
-                onDragCancel = {
-                    // Cancel drag interaction
-                    currentDragInteraction?.let { interaction ->
-                        coroutineScope.launch {
-                            interactionSource?.emit(DragInteraction.Cancel(interaction))
-                        }
-                    }
-                    
-                    if (isDragging) {
-                        onDragStopped()
-                    }
-                    
-                    isDragging = false
-                    currentDragInteraction = null
-                },
-                onDrag = onDrag,
-            )
-        }
-    }
-}
+) = configureDrag(
+    mode = DragStartMode.Immediate,
+    key = key,
+    enabled = enabled,
+    interactionSource = interactionSource,
+    onDragStarted = onDragStarted,
+    onDragStopped = onDragStopped,
+    onDrag = onDrag,
+)
 
 /**
- * Makes an element draggable after a long press gesture.
- * 
- * @param key Unique key for this draggable modifier
- * @param enabled Whether dragging is enabled
- * @param interactionSource Optional source for tracking drag interactions
- * @param onDragStarted Callback when drag starts with the start position
- * @param onDragStopped Callback when drag stops
- * @param onDrag Callback for each drag movement with the change and delta
+ * Long-press to start dragging.
  */
 internal fun Modifier.longPressDraggable(
     key: Any?,
@@ -125,76 +115,12 @@ internal fun Modifier.longPressDraggable(
     onDragStarted: (Offset) -> Unit = { },
     onDragStopped: () -> Unit = { },
     onDrag: (change: PointerInputChange, dragAmount: Offset) -> Unit,
-) = composed {
-    val coroutineScope = rememberCoroutineScope()
-    var currentDragInteraction by remember { mutableStateOf<DragInteraction.Start?>(null) }
-    var isDragging by remember { mutableStateOf(false) }
-
-    // Clean up when the key changes or the composable leaves composition
-    DisposableEffect(key) {
-        onDispose {
-            if (isDragging) {
-                // Cancel any ongoing drag interaction
-                currentDragInteraction?.let { interaction ->
-                    coroutineScope.launch {
-                        interactionSource?.emit(DragInteraction.Cancel(interaction))
-                    }
-                }
-                
-                // Notify that dragging has stopped
-                onDragStopped()
-                isDragging = false
-            }
-        }
-    }
-
-    pointerInput(key, enabled) {
-        if (enabled) {
-            detectDragGesturesAfterLongPress(
-                onDragStart = { startPosition ->
-                    isDragging = true
-                    
-                    // Start drag interaction
-                    currentDragInteraction = DragInteraction.Start().also { interaction ->
-                        coroutineScope.launch {
-                            interactionSource?.emit(interaction)
-                        }
-                    }
-                    
-                    onDragStarted(startPosition)
-                },
-                onDragEnd = {
-                    // End drag interaction
-                    currentDragInteraction?.let { interaction ->
-                        coroutineScope.launch {
-                            interactionSource?.emit(DragInteraction.Stop(interaction))
-                        }
-                    }
-                    
-                    if (isDragging) {
-                        onDragStopped()
-                    }
-                    
-                    isDragging = false
-                    currentDragInteraction = null
-                },
-                onDragCancel = {
-                    // Cancel drag interaction
-                    currentDragInteraction?.let { interaction ->
-                        coroutineScope.launch {
-                            interactionSource?.emit(DragInteraction.Cancel(interaction))
-                        }
-                    }
-                    
-                    if (isDragging) {
-                        onDragStopped()
-                    }
-                    
-                    isDragging = false
-                    currentDragInteraction = null
-                },
-                onDrag = onDrag,
-            )
-        }
-    }
-}
+) = configureDrag(
+    mode = DragStartMode.AfterLongPress,
+    key = key,
+    enabled = enabled,
+    interactionSource = interactionSource,
+    onDragStarted = onDragStarted,
+    onDragStopped = onDragStopped,
+    onDrag = onDrag,
+)

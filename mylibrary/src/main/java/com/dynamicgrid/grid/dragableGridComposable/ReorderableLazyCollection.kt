@@ -153,22 +153,18 @@ internal interface LazyCollectionLayoutInfo<out T> {
      * @return List of items fully within the content area
      */
     fun getItemsInContentArea(padding: CollectionScrollPadding = CollectionScrollPadding.ZERO): List<LazyCollectionItemInfo<T>> {
-        val (contentStartOffset, contentEndOffset) = getScrollAreaOffsets(
-            padding
-        )
-
-        return when (orientation) {
-            Orientation.Vertical -> {
-                visibleItemsInfo.filter { item ->
-                    item.offset.y >= contentStartOffset && item.offset.y + item.size.height <= contentEndOffset
-                }
+        val (contentStart, contentEnd) = getScrollAreaOffsets(padding)
+        // Compute the main-axis start and end for each item and keep those fully inside the content span.
+        return visibleItemsInfo.filter { item ->
+            val start = when (orientation) {
+                Orientation.Vertical -> item.offset.y.toFloat()
+                Orientation.Horizontal -> item.offset.x.toFloat()
             }
-
-            Orientation.Horizontal -> {
-                visibleItemsInfo.filter { item ->
-                    item.offset.x >= contentStartOffset && item.offset.x + item.size.width <= contentEndOffset
-                }
+            val extent = when (orientation) {
+                Orientation.Vertical -> item.size.height.toFloat()
+                Orientation.Horizontal -> item.size.width.toFloat()
             }
+            start >= contentStart && (start + extent) <= contentEnd
         }
     }
 }
