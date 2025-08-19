@@ -51,17 +51,17 @@ import kotlinx.coroutines.withTimeout
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
- * Creates and remembers a [DraggableGridState] for managing drag-and-drop in a lazy grid.
+ * Creates and remembers a [ReorderGridController] for managing drag-and-drop in a lazy grid.
  * 
  * @param gridState The underlying [LazyGridState] to control
  * @param contentPadding Padding around the draggable content area
  * @param edgeScrollThreshold Distance from edges that triggers auto-scrolling
  * @param autoScroller Optional custom auto-scroller for controlling scroll behavior
  * @param onItemMoved Callback invoked when an item is moved to a new position
- * @return A [DraggableGridState] that manages the drag-and-drop interactions
+ * @return A [ReorderGridController] that manages the drag-and-drop interactions
  */
 @Composable
-fun rememberDraggableGridState(
+fun rememberReorderGridController(
     gridState: LazyGridState,
     contentPadding: PaddingValues = PaddingValues(0.dp),
     edgeScrollThreshold: Dp = DraggableGridDefaults.EDGE_SCROLL_THRESHOLD,
@@ -70,7 +70,7 @@ fun rememberDraggableGridState(
         scrollPixelsProvider = { gridState.layoutInfo.mainAxisViewportSize * SCROLL_SPEED_FACTOR },
     ),
     onItemMoved: suspend CoroutineScope.(from: LazyGridItemInfo, to: LazyGridItemInfo) -> Unit,
-): DraggableGridState {
+): ReorderGridController {
 
     val density = LocalDensity.current
     val scrollThresholdPx = with(density) { edgeScrollThreshold.toPx() }
@@ -94,7 +94,7 @@ fun rememberDraggableGridState(
     return remember(
         coroutineScope, gridState, scrollThresholdPx, absolutePadding, autoScroller
     ) {
-        DraggableGridState(
+        ReorderGridController(
             gridState = gridState,
             coroutineScope = coroutineScope,
             onItemMovedState = onItemMovedState,
@@ -150,7 +150,7 @@ private fun LazyGridLayoutInfo.toLazyCollectionLayoutInfo() =
  * State holder for managing drag-and-drop operations in a lazy grid.
  */
 @Stable
-class DraggableGridState internal constructor(
+class ReorderGridController internal constructor(
     gridState: LazyGridState,
     coroutineScope: CoroutineScope,
     onItemMovedState: State<suspend CoroutineScope.(from: LazyGridItemInfo, to: LazyGridItemInfo) -> Unit>,
@@ -606,7 +606,7 @@ private fun LazyGridState.toLazyCollectionState() =
  * in a lazy grid. It handles the visual feedback during drag operations including
  * elevation changes and smooth animations.
  * 
- * @param state The [DraggableGridState] managing the drag-and-drop operations
+ * @param state The [ReorderGridController] managing the drag-and-drop operations
  * @param key Unique key identifying this item
  * @param modifier Modifier to apply to this item
  * @param enabled Whether this item can be dragged
@@ -614,8 +614,8 @@ private fun LazyGridState.toLazyCollectionState() =
  */
 @ExperimentalFoundationApi
 @Composable
-fun LazyGridItemScope.ReorderableItem(
-    state: DraggableGridState,
+fun LazyGridItemScope.MovableGridCell(
+    state: ReorderGridController,
     key: Any,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,

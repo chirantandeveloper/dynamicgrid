@@ -23,8 +23,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.dynamicgrid.grid.dragableGridComposable.ReorderableItem
-import com.dynamicgrid.grid.dragableGridComposable.rememberDraggableGridState
+import com.dynamicgrid.grid.dragableGridComposable.MovableGridCell
+import com.dynamicgrid.grid.dragableGridComposable.rememberReorderGridController
 import com.example.draggablegridview.data.Item
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -33,7 +33,7 @@ fun SimpleReorderableLazyVerticalGridScreen(items : List<Item>, onMove : (Int, I
 
     var list by remember { mutableStateOf(items) }
     val lazyGridState = rememberLazyGridState()
-    val reorderableLazyGridState = rememberDraggableGridState(lazyGridState) { from, to ->
+    val reorderableLazyGridState = rememberReorderGridController(lazyGridState) { from, to ->
         list = list.toMutableList().apply {
             add(to.index, removeAt(from.index))
         }
@@ -51,7 +51,7 @@ fun SimpleReorderableLazyVerticalGridScreen(items : List<Item>, onMove : (Int, I
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         itemsIndexed(list, key = { _, item -> item.id }) { index, item ->
-            ReorderableItem(reorderableLazyGridState, item.id) {
+            MovableGridCell(reorderableLazyGridState, item.id) {
                 Card(
                     onClick = {
                         Log.e("TAG", "SimpleReorderableLazyVerticalGridScreen: $index  ${item.text}  $item", )
