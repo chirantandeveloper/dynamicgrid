@@ -15,4 +15,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "DraggableGridView"
 include(":app")
-include(":mylibrary")
+include(":draggableGrid")
