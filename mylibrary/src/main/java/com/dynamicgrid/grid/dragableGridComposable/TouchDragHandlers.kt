@@ -1,3 +1,4 @@
+
 package com.dynamicgrid.grid.dragableGridComposable
 
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -17,29 +18,28 @@ import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import kotlinx.coroutines.launch
 
-private enum class DragStartMode { Immediate, AfterLongPress }
+private enum class StartMode { Instant, Hold }
 
-private fun Modifier.configureDrag(
-    mode: DragStartMode,
+private fun Modifier.attachDragInternal(
+    mode: StartMode,
     key: Any?,
     enabled: Boolean,
     interactionSource: MutableInteractionSource?,
-    onDragStarted: (Offset) -> Unit,
-    onDragStopped: () -> Unit,
-    onDrag: (change: PointerInputChange, dragAmount: Offset) -> Unit,
-): Modifier = composed {
+    onStart: (Offset) -> Unit,
+    onStop: () -> Unit,
+    onDrag: (PointerInputChange, Offset) -> Unit
+) = composed {
     val scope = rememberCoroutineScope()
     var startInteraction by remember { mutableStateOf<DragInteraction.Start?>(null) }
     var dragging by remember { mutableStateOf(false) }
 
-    // Ensure we tidy up interactions on disposal or key change
     DisposableEffect(key) {
         onDispose {
             if (dragging) {
                 startInteraction?.let { s ->
                     scope.launch { interactionSource?.emit(DragInteraction.Cancel(s)) }
                 }
-                onDragStopped()
+                onStop()
                 dragging = false
             }
         }
@@ -47,80 +47,51 @@ private fun Modifier.configureDrag(
 
     pointerInput(key, enabled) {
         if (!enabled) return@pointerInput
-        val commonStart: (Offset) -> Unit = { pos ->
+        val start: (Offset) -> Unit = { pos ->
             dragging = true
             startInteraction = DragInteraction.Start().also { s ->
                 scope.launch { interactionSource?.emit(s) }
             }
-            onDragStarted(pos)
+            onStart(pos)
         }
-        val commonEnd: () -> Unit = {
+        val end: () -> Unit = {
             startInteraction?.let { s -> scope.launch { interactionSource?.emit(DragInteraction.Stop(s)) } }
-            if (dragging) onDragStopped()
+            if (dragging) onStop()
             dragging = false
             startInteraction = null
         }
-        val commonCancel: () -> Unit = {
+        val cancel: () -> Unit = {
             startInteraction?.let { s -> scope.launch { interactionSource?.emit(DragInteraction.Cancel(s)) } }
-            if (dragging) onDragStopped()
+            if (dragging) onStop()
             dragging = false
             startInteraction = null
         }
+
         when (mode) {
-            DragStartMode.Immediate ->
-                detectDragGestures(
-                    onDragStart = commonStart,
-                    onDragEnd = commonEnd,
-                    onDragCancel = commonCancel,
-                    onDrag = onDrag,
-                )
-            DragStartMode.AfterLongPress ->
-                detectDragGesturesAfterLongPress(
-                    onDragStart = commonStart,
-                    onDragEnd = commonEnd,
-                    onDragCancel = commonCancel,
-                    onDrag = onDrag,
-                )
+            StartMode.Instant -> detectDragGestures(
+                onDragStart = start, onDragEnd = end, onDragCancel = cancel, onDrag = onDrag
+            )
+            StartMode.Hold -> detectDragGesturesAfterLongPress(
+                onDragStart = start, onDragEnd = end, onDragCancel = cancel, onDrag = onDrag
+            )
         }
     }
 }
 
-/**
- * Immediate drag handler.
- */
-internal fun Modifier.draggable(
+internal fun Modifier.attachInstantDrag(
     key: Any?,
     enabled: Boolean = true,
     interactionSource: MutableInteractionSource? = null,
-    onDragStarted: (Offset) -> Unit = { },
-    onDragStopped: () -> Unit = { },
-    onDrag: (change: PointerInputChange, dragAmount: Offset) -> Unit,
-) = configureDrag(
-    mode = DragStartMode.Immediate,
-    key = key,
-    enabled = enabled,
-    interactionSource = interactionSource,
-    onDragStarted = onDragStarted,
-    onDragStopped = onDragStopped,
-    onDrag = onDrag,
-)
+    onStart: (Offset) -> Unit = {},
+    onStop: () -> Unit = {},
+    onDrag: (PointerInputChange, Offset) -> Unit
+) = attachDragInternal(StartMode.Instant, key, enabled, interactionSource, onStart, onStop, onDrag)
 
-/**
- * Long-press to start dragging.
- */
-internal fun Modifier.longPressDraggable(
+internal fun Modifier.attachHoldDrag(
     key: Any?,
     enabled: Boolean = true,
     interactionSource: MutableInteractionSource? = null,
-    onDragStarted: (Offset) -> Unit = { },
-    onDragStopped: () -> Unit = { },
-    onDrag: (change: PointerInputChange, dragAmount: Offset) -> Unit,
-) = configureDrag(
-    mode = DragStartMode.AfterLongPress,
-    key = key,
-    enabled = enabled,
-    interactionSource = interactionSource,
-    onDragStarted = onDragStarted,
-    onDragStopped = onDragStopped,
-    onDrag = onDrag,
-)
+    onStart: (Offset) -> Unit = {},
+    onStop: () -> Unit = {},
+    onDrag: (PointerInputChange, Offset) -> Unit
+) = attachDragInternal(StartMode.Hold, key, enabled, interactionSource, onStart, onStop, onDrag)
