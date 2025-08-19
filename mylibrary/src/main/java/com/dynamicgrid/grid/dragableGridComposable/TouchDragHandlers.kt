@@ -71,9 +71,21 @@ private fun Modifier.attachDragInternal(
             StartMode.Instant -> detectDragGestures(
                 onDragStart = start, onDragEnd = end, onDragCancel = cancel, onDrag = onDrag
             )
-            StartMode.Hold -> detectDragGesturesAfterLongPress(
-                onDragStart = start, onDragEnd = end, onDragCancel = cancel, onDrag = onDrag
+            StartMode.Hold -> detectDragGestures(
+                onDragStart = { offset ->
+                    // manually delay half second before allowing drag
+                    scope.launch {
+                        kotlinx.coroutines.delay(500) // 500ms hold
+                        start(offset)
+                    }
+                },
+                onDragEnd = end,
+                onDragCancel = cancel,
+                onDrag = { change, dragAmount ->
+                    if (dragging) onDrag(change, dragAmount) // only if hold completed
+                }
             )
+
         }
     }
 }
