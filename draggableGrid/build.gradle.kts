@@ -62,7 +62,7 @@ afterEvaluate {
 
                 groupId = "com.github.chirantandeveloper"
                 artifactId = "dynamicgrid"
-                version = "1.0.2"
+                version = "1.0.3"
             }
         }
     }
